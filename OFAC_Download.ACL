@@ -1,0 +1,256 @@
+@ACL1000
+^LOGFILE  OFAC_Download                       "" "OFAC_Download.LOG"
+[PARENT_FOLDER_ID] 0
+^BATCH    Exec_Download_OFAC                 
+[PARENT_FOLDER_ID] 0
+COMMENT 
+**********************************************************************************
+* 
+* Script Name: Exec_Download_OFAC
+* 
+* Description: As part of its enforcement efforts, OFAC (US Office of Foreign 
+* Assets Control) publishes a list of individuals and companies owned or
+* controlled by, or acting for or on behalf of, targeted countries. It also lists
+* individuals, groups, and entities, such as terrorists and narcotics traffickers
+* designated under programs that are not country-specific. Collectively, such
+* individuals and companies are called "Specially Designated Nationals" or
+* "SDNs." Their assets are blocked and U.S. persons are generally prohibited from
+* dealing with them.  
+*
+* More info here: 
+* http://www.treasury.gov/resource-center/sanctions/SDN-List/Pages/default.aspx
+*
+* Created By: Alex Psarras 
+* Created On: 30/05/2013
+*
+* version 1.0
+* 
+**********************************************************************************
+END
+
+SET SESSION 
+SET SAFETY OFF
+SET EXACT ON 
+SET FOLDER /Temp
+SET DATE "DD/MM/YYYY"
+SET OVERFLOW OFF
+SET SUPPRESSXML OFF
+SET PIC "-9,999,999.99"
+SET BEEP 1
+CLOSE PRI SEC 
+
+
+COM ** Create a windows folder
+EXECUTE 'cmd /c MD "C:\ACL_Download"'
+
+COM ** Download the data from http://www.treasury.gov to the newly created windows folder
+EXECUTE "bitsadmin /transfer mydownloadjob  /download /priority normal http://www.treasury.gov/ofac/downloads/add.pip C:\ACL_Download\add.csv"
+EXECUTE "bitsadmin /transfer mydownloadjob  /download /priority normal http://www.treasury.gov/ofac/downloads/alt.pip C:\ACL_Download\alt.csv"
+EXECUTE "bitsadmin /transfer mydownloadjob  /download /priority normal http://www.treasury.gov/ofac/downloads/sdn.pip C:\ACL_Download\sdn.csv" 
+
+
+COM ** See http://www.treasury.gov/resource-center/sanctions/SDN-List/Documents/dat_spec.txt for file layout
+
+COM ** Import data
+COM ** FORMAT SDN | DELIMITED
+COM ** Main table, text file name SDN.PIP
+SET FOLDER /Temp
+DIRECTORY *.ACL to TEMP
+OPEN TEMP
+EXTRACT BLANKS(1500) AS "WHOLERECORD" TO "TempImport" FIRST 0
+OPEN TempImport
+DELETE FIELD WHOLERECORD OK 
+DEFINE FIELD WHOLERECORD    ASCII       1 1500   WIDTH 1  
+OPEN "C:\ACL_Download\sdn.csv" FORMAT TempImport CRLF
+
+OPEN TempImport
+ 
+DEFINE FIELD Ent_num COMPUTED 
+AS "Unique;Record;Identifier"
+SUBSTRING(ALLTRIM(SPLIT(WHOLERECORD "|" 1 '"')) 1 10)
+
+DEFINE FIELD SDN_Name COMPUTED 
+AS "Name of SDN"
+SUBSTRING(ALLTRIM(SPLIT(WHOLERECORD "|" 2 '"')) 1 350)
+
+DEFINE FIELD SDN_Type COMPUTED 
+AS "Type of SDN"
+SUBSTRING(ALLTRIM(SPLIT(WHOLERECORD "|" 3 '"')) 1 12)
+
+DEFINE FIELD Program COMPUTED 
+AS "Sanctions Program Name"
+SUBSTRING(ALLTRIM(SPLIT(WHOLERECORD "|" 4 '"')) 1 50)
+
+DEFINE FIELD Title COMPUTED 
+AS "Title;of an;Individual"
+SUBSTRING(ALLTRIM(SPLIT(WHOLERECORD "|" 5 '"')) 1 200)
+
+DEFINE FIELD Call_Sign COMPUTED 
+AS "Vessel;Call;Sign"
+SUBSTRING(ALLTRIM(SPLIT(WHOLERECORD "|" 6 '"')) 1 8)
+
+DEFINE FIELD Vess_type COMPUTED 
+AS "Vessel;Type"
+SUBSTRING(ALLTRIM(SPLIT(WHOLERECORD "|" 7 '"')) 1 25)
+
+DEFINE FIELD Tonnage COMPUTED 
+AS "Vessel;Tonnage"
+SUBSTRING(ALLTRIM(SPLIT(WHOLERECORD "|" 8 '"')) 1 14)
+
+DEFINE FIELD GRT COMPUTED 
+AS "Gross;Registered;Tonnage"
+SUBSTRING(ALLTRIM(SPLIT(WHOLERECORD "|" 9 '"')) 1 8)
+
+DEFINE FIELD Vess_flag COMPUTED 
+AS "Vessel;Flag"
+SUBSTRING(ALLTRIM(SPLIT(WHOLERECORD "|" 10 '"')) 1 40)
+
+DEFINE FIELD Vess_owner COMPUTED 
+AS "Vessel;Owner"
+SUBSTRING(ALLTRIM(SPLIT(WHOLERECORD "|" 11 '"')) 1 150)
+
+DEFINE FIELD Remarks COMPUTED 
+AS "Remarks"
+SUBSTRING(ALLTRIM(SPLIT(WHOLERECORD "|" 12 '"')) 1 1000)
+
+EXTRACT FIELDS Ent_num SDN_Name SDN_Type Program Title Call_Sign Vess_type Tonnage GRT Vess_flag Vess_owner Remarks TO "SDN"
+
+
+COM ** FORMAT ADD | DELIMITED
+COM ** Address table, text file name ADD.PIP
+SET FOLDER /Temp
+DIRECTORY *.ACL to TEMP
+OPEN TEMP
+EXTRACT BLANKS(1500) AS "WHOLERECORD" TO "TempImport" FIRST 0
+OPEN TempImport
+DELETE FIELD WHOLERECORD OK 
+DEFINE FIELD WHOLERECORD    ASCII       1 1500   WIDTH 1  
+OPEN "C:\ACL_Download\add.csv" FORMAT TempImport CRLF
+
+OPEN TempImport
+ 
+DEFINE FIELD Ent_num COMPUTED 
+AS "Unique;Record;Identifier"
+SUBSTRING(ALLTRIM(SPLIT(WHOLERECORD "|" 1 '"')) 1 10)
+
+DEFINE FIELD Add_num COMPUTED 
+AS "Unique;Address;Identifier"
+SUBSTRING(ALLTRIM(SPLIT(WHOLERECORD "|" 2 '"')) 1 10)
+
+DEFINE FIELD Address COMPUTED 
+AS "Street;Address of SDN"
+SUBSTRING(ALLTRIM(SPLIT(WHOLERECORD "|" 3 '"')) 1 750)
+
+DEFINE FIELD Add_rest COMPUTED 
+AS "Rest;of Address"
+SUBSTRING(ALLTRIM(SPLIT(WHOLERECORD "|" 4 '"')) 1 116)
+
+DEFINE FIELD Country COMPUTED 
+AS "Country;of Address"
+SUBSTRING(ALLTRIM(SPLIT(WHOLERECORD "|" 5 '"')) 1 250)
+
+DEFINE FIELD Add_remarks COMPUTED 
+AS "Remarks;of Address"
+SUBSTRING(ALLTRIM(SPLIT(WHOLERECORD "|" 6 '"')) 1 200)
+
+EXTRACT FIELDS Ent_num Add_num Address Add_Rest Country Add_remarks TO "ADD"
+
+
+COM ** FORMAT ALT | DELIMITED
+COM ** Address table, text file name ALT.PIP
+SET FOLDER /Temp
+DIRECTORY *.ACL to TEMP
+OPEN TEMP
+EXTRACT BLANKS(1500) AS "WHOLERECORD" TO "TempImport" FIRST 0
+OPEN TempImport
+DELETE FIELD WHOLERECORD OK 
+DEFINE FIELD WHOLERECORD    ASCII       1 1500   WIDTH 1  
+OPEN "C:\ACL_Download\alt.csv" FORMAT TempImport CRLF
+
+OPEN TempImport
+ 
+DEFINE FIELD Ent_num COMPUTED 
+AS "Unique;Record;Identifier"
+SUBSTRING(ALLTRIM(SPLIT(WHOLERECORD "|" 1 '"')) 1 10)
+
+DEFINE FIELD Alt_num COMPUTED 
+AS "Unique;Alternative;Identifier"
+SUBSTRING(ALLTRIM(SPLIT(WHOLERECORD "|" 2 '"')) 1 10)
+
+DEFINE FIELD Alt_type COMPUTED 
+AS "Type of;Alternate;Identity"
+SUBSTRING(ALLTRIM(SPLIT(WHOLERECORD "|" 3 '"')) 1 8)
+
+DEFINE FIELD Alt_name COMPUTED 
+AS "Alternate;Identity;Name"
+SUBSTRING(ALLTRIM(SPLIT(WHOLERECORD "|" 4 '"')) 1 350)
+
+DEFINE FIELD Alt_remarks COMPUTED 
+AS "Remarks;of Alternate;Identity"
+SUBSTRING(ALLTRIM(SPLIT(WHOLERECORD "|" 5 '"')) 1 200)
+
+EXTRACT FIELDS Ent_num Alt_num Alt_type Alt_name Alt_remarks TO "ALT"
+
+
+COM ** Join the three files (People (SND), Addresses (ADD) and Aka's (ALT))
+SET FOLDER /Temp
+OPEN ADD 
+OPEN SDN SECONDARY
+JOIN PKEY Ent_num FIELDS ALL SKEY Ent_num WITH ALL TO "x_Join1" OPEN PRIMARY PRESORT SECSORT
+
+SET FOLDER /Input/OFAC_List
+OPEN ALT
+OPEN x_Join1 SECONDARY
+JOIN PKEY Ent_num FIELDS ALL SKEY Ent_num WITH ALL TO "SDN_Full_Details" PRIMARY OPEN PRESORT
+
+OPEN SDN_Full_Details
+
+DEFINE FIELD Full_Address   COMPUTED 
+AS "Full Address"  
+ ALLTRIM(Address) + ", " + ALLTRIM(Add_rest) + ", " + ALLTRIM(Country) IF ALLTRIM(Address) <> "-0-" AND ALLTRIM(Add_rest) <> "-0-" AND ALLTRIM(Country) <> "-0-"
+ ALLTRIM(Add_rest) + ", " + ALLTRIM(Country) IF ALLTRIM(Address) = "-0-" AND ALLTRIM(Add_rest) <> "-0-" AND ALLTRIM(Country) <> "-0-"
+ ALLTRIM(Address) + ", " + ALLTRIM(Add_rest) IF ALLTRIM(Address) <> "-0-" AND ALLTRIM(Add_rest) <> "-0-" AND ALLTRIM(Country) = "-0-"
+ ALLTRIM(Address) + ", " + ALLTRIM(Country) IF ALLTRIM(Address) <> "-0-" AND ALLTRIM(Add_rest) = "-0-" AND ALLTRIM(Country) <> "-0-"
+ ALLTRIM(Address) IF ALLTRIM(Address) <> "-0-"
+ ALLTRIM(Add_rest) IF ALLTRIM(Add_rest) <> "-0-"
+ ALLTRIM(Country) IF ALLTRIM(Country) <> "-0-"
+ ""
+
+COM ** Create the final view
+
+DEFINE VIEW SDN_Report OK
+DEFINE COLUMN SDN_Report Ent_num 
+DEFINE COLUMN SDN_Report SDN_Name 
+DEFINE COLUMN SDN_Report SDN_Type 
+DEFINE COLUMN SDN_Report Program 
+DEFINE COLUMN SDN_Report Title 
+DEFINE COLUMN SDN_Report Call_Sign 
+DEFINE COLUMN SDN_Report Vess_type 
+DEFINE COLUMN SDN_Report Tonnage 
+DEFINE COLUMN SDN_Report GRT 
+DEFINE COLUMN SDN_Report Vess_flag 
+DEFINE COLUMN SDN_Report Vess_owner
+DEFINE COLUMN SDN_Report Remarks
+DEFINE COLUMN SDN_Report Add_num 
+DEFINE COLUMN SDN_Report Full_Address 
+DEFINE COLUMN SDN_Report Address 
+DEFINE COLUMN SDN_Report Add_Rest 
+DEFINE COLUMN SDN_Report Country 
+DEFINE COLUMN SDN_Report Add_remarks
+DEFINE COLUMN SDN_Report Alt_num 
+DEFINE COLUMN SDN_Report Alt_type 
+DEFINE COLUMN SDN_Report Alt_name 
+DEFINE COLUMN SDN_Report Alt_remarks
+
+COM ** Housekeeping
+OPEN "TEMP.FIL" FORMAT TempImport CRLF
+DELETE "TEMP.FIL" OK
+DELETE "TempImport.FIL" OK
+DELETE "SDN.FIL" OK
+DELETE "ALT.FIL" OK
+DELETE "ADD.FIL" OK
+DELETE FOLDER /Temp OK
+EXEC 'cmd /c RD /S /Q "C:\ACL_Download\"'
+
+SET SAFETY ON
+^OPEN 
